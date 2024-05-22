@@ -1,0 +1,694 @@
+!Это программа моделирования чистого изгиба пластины 
+!с линейным градиентом пластических свойств по толщине. 
+!Есть уже программа для коррозии, но для отчета и 
+!НИРов нужен просто изгиб.
+!
+
+
+iwight=1
+	*if,iwight,ne,0,then
+/RGB,INDEX,100,100,100, 0   
+/RGB,INDEX, 80, 80, 80,13   
+/RGB,INDEX, 60, 60, 60,14   
+/RGB,INDEX, 0, 0, 0,15  
+/REPLOT 
+	*endif
+!
+/PREP7
+!
+PI=4.0*ATAN(1.0)!задание числа pi
+!****
+*DIM,s,ARRAY,16
+! Тут размеры задаются в миллиметрах, однако далее для согласования размерностей, переводятся в метры. 
+s(1)=14!толщина
+s(3)=s(1)*10! это не надо пока в плоской задаче
+s(5) =s(1)*3!s(1)*2 !Размер упруго-пластического материала
+s(6) =s(1) !Размер упругих слоев
+s(4)=s(5)+s(6)+s(1)*0.5!50!точка приложения нагрузки
+s(2)=s(4)+s(1)!100! длина
+!!!!!!!!!!!!!!!!!!!!!!
+	
+!Переведем все размеры в метры
+	*do,i,1,16,1
+	s(i)=s(i)/1000
+	*enddo
+
+indpla=2  ! Плоская задача
+indpl=2     !0 - пнс, 1-осз, 2-пд
+	*if,indpla,eq,1,then
+	s(3)=1
+	*endif
+!полигон объемный octa
+!arg 1 - число углов, arg2 - толщина по z, может быть полигон, гексагон и т.д. т.е. от 3 до 8
+*create,octav,,
+	*if,indpla,ne,1,and,arg2,ne,0,then
+	asel,none
+	vsel,none
+	*endif
+*get,nk,kp,0,num,maxd
+k,nk+1,arg3,arg4,0
+k,nk+2,arg5,arg6,0
+k,nk+3,arg7,arg8,0
+	*if,arg1,ge,4,then
+	k,nk+4,arg9,ar10,0
+	*endif
+	*if,arg1,ge,5,then
+	k,nk+5,ar11,ar12,0
+	*endif
+	*if,arg1,ge,6,then
+	k,nk+6,ar13,ar14,0
+	*endif
+	*if,arg1,ge,7,then
+	k,nk+7,ar15,ar16,0
+	*endif
+	*if,arg1,ge,8,then
+	k,nk+8,ar17,ar18,0
+	*endif
+	*if,arg1,eq,3,then
+	a,nk+1,nk+2,nk+3
+	*endif
+	*if,arg1,eq,4,then
+	a,nk+1,nk+2,nk+3,nk+4
+	*endif
+	*if,arg1,eq,5,then
+	a,nk+1,nk+2,nk+3,nk+4,nk+5
+	*endif
+	*if,arg1,eq,6,then
+	a,nk+1,nk+2,nk+3,nk+4,nk+5,nk+6
+	*endif
+	*if,arg1,eq,7,then
+	a,nk+1,nk+2,nk+3,nk+4,nk+5,nk+6,nk+7
+	*endif
+	*if,arg1,eq,8,then
+	a,nk+1,nk+2,nk+3,nk+4,nk+5,nk+6,nk+7,nk+8
+	*endif
+	*if,indpla,ne,1,and,arg2,ne,0,then
+	*GET,narea,area,0,NUM,MIN
+	VOFFST,narea,arg2, ,  
+	*endif
+*end
+
+
+!реальные координаты узла
+*dim,reacn,array,3! x, y, и z реальныя координаты узла
+*create,rcoorn!arg1 - номер узла, arg2 - indpla, arg3 - 0 - prep, 1- post
+	*do,i_r,1,3,1
+	reacn(i_r)=0
+	*enddo
+	*if,arg3,ne,0,then
+	*get,reacn(1),node,arg1,u,x
+	*get,reacn(2),node,arg1,u,y
+		*if,arg2,ne,1,then
+		*get,reacn(3),node,arg1,u,z
+		*endif
+	*endif
+reacn(1)=nx(arg1)+reacn(1)
+reacn(2)=ny(arg1)+reacn(2)
+reacn(3)=nz(arg1)+reacn(3)
+*end
+!******************
+!вытяжка плоской фигуры на arg1
+*create, artovo
+*get,narea,area,0,count !считаем area
+*DIM,nareaa,ARRAY,narea !создаем массив
+	*do,i,1,narea,1
+		*if,i,eq,1,then
+		*GET,nareaa(1),area,0,NUM,MIN!выбор мин по номеру area
+		*else
+		*GET,nareaa(i),area,nareaa(i-1),NXTH!!выбор след по номеру area
+		*endif
+	*enddo
+	*do,i,1,narea,1
+		VOFFST,nareaa(i),arg1, ,!команда вытяжки  
+	*enddo
+	allsel,all
+*end
+!!!!!!!!!!!!!!!!!!!!!!
+!сетка
+*create,avmesh
+size=arg1
+	*if,indpla,eq,1,then
+		*if,size,gt,s(1)/4,then
+		size=s(1)/4
+		*endif
+	*else
+!		*if,size,gt,min(s(1)/8,s(3)/4),then
+!		size=min(s(1)/8,s(3)/4)
+hs=min(s(1)/6,s(3)/4)
+hs=s(1)
+		*if,size,gt,hs,then
+		size=hs
+		*endif
+	*endif
+ESIZE,size,0,
+	*if,indpla,eq,1,then
+	aMESH,ALL
+	*else
+	VMESH,ALL
+	*endif
+*end
+!!!!!!!!!!!!!!!!!!!!
+*dim,chl,char,1 !создание текстового массива, char - переменная chl является текстом 
+!созидание имени
+*create,ch3
+	*if,10,gt,arg1,then
+		chl(1)=strcat('00',CHRVAL(arg1))! CHRVAL- превращает число в текст, strcat - соединяет два текста в один 
+	*endif
+	*if,arg1,ge,10,and,99,ge,arg1,then
+		chl(1)=strcat('0',CHRVAL(arg1))
+	*endif
+	*if,arg1,ge,100,then
+		chl(1)=CHRVAL(arg1)
+	*endif
+*end	
+!!!!!!!!!!!!!!!
+save
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!Начинаем строить тело body
+!*use, octav, 5, 0,s(5)+s(6),-s(1)/2,s(2),-s(1)/2,s(2),s(1)/2,s(4),s(1)/2,s(5)+s(6),s(1)/2  !Количество углов, толщина, x,y,x,y,x,y....
+!*use, octav, 4, 0,s(5)+s(6),-s(1)/2,s(4),-s(1)/2,s(4),s(1)/2,s(5)+s(6),s(1)/2  !Количество углов, толщина, x,y,x,y,x,y....
+!*use, octav, 4, 0,s(4),-s(1)/2,s(2),-s(1)/2,s(2),s(1)/2,s(4),s(1)/2  !Количество углов, толщина, x,y,x,y,x,y....
+stepx=s(1)/16!((s(4)-(s(5)+s(6)))*2
+*dim,xv,array,54
+xv(1)=s(5)!s(4)
+ixend=0
+	*do,i,2,54,1
+	xv(i)=xv(i-1)+stepx
+		*if,stepx/2,ge,abs(s(4)-xv(i)),then
+		xv(i)=s(4)
+		ix4=i
+		*endif
+		*if,xv(i),ge,s(2),or,stepx/2,ge,abs(s(2)-xv(i)),then
+		xv(i)=s(2)
+		ixend=i
+		*endif
+*use, octav, 4, 0,xv(i-1),-s(1)/2,xv(i),-s(1)/2,xv(i),s(1)/2,xv(i-1),s(1)/2
+	stepx=stepx*2
+	*if,ixend,ne,0,exit
+	*enddo
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ny = 21 ! Количество слоев
+*dim, y, array,ny+1  !Массив ординат слоев
+
+*dim, ary, array,ny,7 !1 - Номер пластической арии, 2 - номер упругой арии, 
+                                  !3 - исходный материал(который задан по толщине)
+                                  !4 - текущий материал 
+                                  !5 - индекс жизни элемента (0 или 1), 6 - остаточная толщина
+		!7 - номер элемента по которому будет определяться напряжение в слое
+st = s(1)/ny
+dd = st/50
+	*do, i,1,ny,1
+	y(i) = -s(1)/2 + (i-1)*st
+	y(i+1) = -s(1)/2 + i*st
+	 *use, octav,4,0,0,y(i),s(5),y(i),s(5),y(i+1),0,y(i+1)
+!	 *use, octav,4,0,s(5),y(i),s(5)+s(6),y(i),s(5)+s(6),y(i+1),s(5),y(i+1)
+	*enddo
+
+allsel,all 
+aglue,all   !Склеивание
+!вытяжка
+	*if,indpla,ne,1,then
+	*use,artovo,s(3)
+	vglue,all   !Склеивание
+	*endif
+!До этого момента мы сделали склеивание, из-за этого перепутались номера элементов. Теперь хотим их определить
+allsel,all
+	*do, i,1,ny,1
+		*do, j,1,2,1
+		allsel,all
+			*if,indpla,eq,1,then
+			asel,s,loc,x,s(5)*(j-1),s(5)+s(6)*(j-1)
+			asel,r,loc,y,y(i),y(i+1)
+			*GET,ary(i,j),area,0,NUM,MIN!выбор мин по номеру area
+			*else
+			vsel,s,loc,x,s(5)*(j-1),s(5)+s(6)*(j-1)
+			vsel,r,loc,y,y(i),y(i+1)
+			*GET,ary(i,j),volu,0,NUM,MIN!выбор мин по номеру area
+			*endif
+		*enddo 
+	*enddo 
+allsel,all
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!mesh
+!Задаем размер элемента
+el = 2*st
+dd=el/50
+*if,indpla,eq,1,then
+	ET,1,PLANE183   
+KEYOPT,1,1,1
+!KEYOPT,1,3,2
+KEYOPT,1,3,indpl
+KEYOPT,1,6,0
+KEYOPT,1,10,0
+	*else
+	ET,1,SOLID187
+ 	indpl=2
+	*endif
+!Построение сетки
+allsel,all
+	*if,indpla,eq,1,then
+	asel,s,loc,x,0,s(5)!s(4)
+	*else
+	vsel,s,loc,x,0,s(5)!s(4)
+	*endif
+*use,avmesh,el
+	*if,indpla,ne,1,then	
+	VIMP,all,1 
+	*endif
+	*do,i,2,ixend,1
+	allsel,all
+		*if,indpla,eq,1,then
+		asel,s,loc,x,xv(i-1),xv(i)
+		*else
+		vsel,s,loc,x,xv(i-1),xv(i)
+		*endif
+	el=el*2
+		*if,el,gt,s(1)/4,then
+		el=s(1)/4
+		*endif
+	*use,avmesh,el
+	*enddo
+!
+	*if,indpla,ne,1,then	
+	VIMP,all,1 
+	*endif
+save
+
+!Работа с материалами sdeff
+c0 = 530.495*(10e6)
+c1 = -15103.41*(10e6)
+d=1.2
+
+nmat= 2*ny
+
+MPTEMP,,,,,,,,  
+MPTEMP,1,0
+dh=1
+	*do,j,1,2,1
+		*do,i,1,nmat/2,1
+		ii = i+(j-1)*(nmat/2)
+
+		MPDATA,EX,ii,,2e11  
+		MPDATA,PRXY,ii,,0.3  
+		TB,BISO,ii,1,2,  
+		TBTEMP,0
+		yy = (y(i)+y(i+1))/2
+
+		TBDATA,,(c0+c1*yy)*dh,0,,,,   
+			*if,i,eq,1,then
+			symax=(c0+c1*yy)*dh
+			*endif
+		*enddo
+	dh=d
+	*enddo
+save
+!materials
+MPDATA,EX,NMAT+1,,2e11
+MPDATA,PRXY,NMAT+1,,0.3
+!!!!!!!!!!!!!!!!!!!!
+MPDATA,EX,nmat+2,,2e11  
+MPDATA,PRXY,nmat+2,,0.3  
+TB,BISO,nmat+2,1,2,  
+TBTEMP,0
+TBDATA,,symax*1.1,2e11/100,,,,   
+!!!!!!!!!!!!!!!!
+allsel,all
+!MPCHG,nmat+1,ALL,
+MPCHG,1,ALL,
+!MPCHG,nmat+2,ALL,
+!!!!!!!!!!!!!!!!!!!!
+	*do, i,1,ny,1
+	ary(i,3) = i !Задаем свойства
+	ary(i,4) = i !Задаем свойства
+	ary(i,5) = 0!
+	ary(i,6) =st !
+	allsel,all
+		*if,indpla,eq,1,then
+		asel,s,area,,ary(i,1)!выбираем по номеру арии, s - выбирать с нуля. !Выбираем арию
+		esla,s,0 !Выбираем элемент принадлежащий этой арии
+		*else
+		vsel,s,volu,,ary(i,1)!выбираем по номеру арии, s - выбирать с нуля. !Выбираем арию
+		eslv,s,0 !Выбираем элемент принадлежащий этой арии
+		*endif
+	MPCHG,i,ALL, !Назначаем материал
+	*enddo
+allsel,all
+!!!!!!!!!!!!!!!!!!!
+allsel,all
+	*if,indpla,eq,1,then
+	asel,s,loc,x,xv(2),s(2)
+	esla,s,0
+	*else
+	vsel,s,loc,x,xv(2),s(2)
+	eslv,s,0
+	*endif
+MPCHG,nmat+1,ALL,
+!*  
+/PNUM,MAT,1 
+/REPLOT 
+!*  
+allsel,all
+!!!!!!!!!!!!!!!!!!
+allsel,all
+	*do,i,1,ny,1   !В этом цикле происходит выбор крайнего элемента арии, по которому определяется напряжение
+	allsel,all
+		*if,indpla,eq,1,then
+		asel,s,area,,ary(i,1)!выбираем по номеру арии, s - выбирать с нуля.
+		*else
+		vsel,s,volu,,ary(i,1)!выбираем по номеру арии, s - выбирать с нуля.
+		*endif
+	nsel,s,loc,x,-dd,dd
+	nsel,r,loc,z,-dd,dd
+	nsle,r,mid
+		*if,indpla,eq,1,then
+		esla,s,0
+		*else
+		eslv,s,0
+		*endif
+	esln,r,0
+	*GET,ary(i,7),elem,0,NUM,MIN
+	 *enddo
+allsel,all
+!Граничные условия loading
+
+allsel,all
+nsel,s,loc,x,-dd,+dd !плоскость симметрии
+d,all,ux,0
+!
+allsel, all
+!nsel,s,node,,node(s(2),-s(1)/2,0) !опора
+nsel,s,loc,x,s(2)-dd,s(2)+dd
+nsel,r,loc,y,-s(1)/2-dd,-s(1)/2+dd
+d,all,uy,0
+allsel, all
+
+	*if,indpla,ne,1,then
+	allsel,all
+	nsel,s,loc,z,-dd,+dd !плоскость симметрии
+	d,all,uz,0
+	*endif
+!
+allsel,all
+!
+!Сочиняем подпрограммы, которые будут менять материалы
+*create,mater !Задает материал
+	*do,i,1,ny,1
+	*if,ary(i,5),gt,0,cycle	!3-исходный, 4-который получится в результате анализа, 5- уже умер
+	allsel,all
+		*if,indpla,eq,1,then
+		asel,s,area,,ary(i,1)
+		esla,s,0
+		*else
+		vsel,s,volu,,ary(i,1)
+		eslv,s,0
+		*endif
+	MPCHG,ary(i,4), all
+	*enddo
+*end
+
+!material
+*create,mat  !Назначает материал
+ETABLE,v1,s,x
+	*do,i,1,ny,1
+	*if,ary(i,3),gt,nmat/2,cycle ! cycle - пропуск шага
+	*get,a,etab,1,elem, ary(i,7)
+
+		*if,a,ge,0,then
+		ary(i,4) = ary(i,3)
+		*else
+		ary(i,4) = ary(i,3) + (nmat/2)
+		*endif
+	*enddo
+*end
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!линии для моментов
+*create,nrccnt
+allsel,all
+nsel,s,loc,x,s(2+2*(j-1))-dd,s(2+2*(j-1))+dd
+nsel,r,loc,y,sig*s(1)/2-dd,sig*s(1)/2+dd
+*end
+!!!!!!!!!!!!!!!!!!!!
+*dim,nr,array,3,2
+sig=-1
+	*do,j,1,2,1
+	/input,nrccnt
+	*get,nr(1,j),node,0,count
+	sig=1
+	*enddo
+!
+sig=-1
+*DIM,nrc,ARRAY,max(nr(1,1),nr(1,2)),2 !создаем массив
+	*do,j,1,2,1
+	/input,nrccnt
+		*do,i,1,nr(1,j),1
+			*if,i,eq,1,then
+			*GET,nrc(i,j),node,0,NUM,MIN!выбор мин по номеру area
+			*else
+			*GET,nrc(i,j),node,nrc(i-1,j),NXTH!!выбор след по номеру area
+			*endif
+		*enddo
+	sig=1
+	*enddo
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+*create,pddef  !Определение момента и усилий
+allsel,all
+	*do,j,1,2,1
+	nr(2,j)=0
+	nr(3,j)=0
+		*do,i,1,nr(1,j),1
+		*use,rcoorn,nrc(i,j),indpla,1  !arg1 - номер узла, arg2 - indpla, arg3 - 0 - prep, 1- post
+		*get,h,node,nrc(i,j),rf,fy!rf - реакция опры по силе. fy - по игреку
+		nr(2,j)=nr(2,j)+reacn(1)*h
+		nr(3,j)=nr(3,j)+h
+		*enddo
+	*enddo
+pm=abs(nr(2,1)+nr(2,2))/s(3)
+pml=abs(nr(3,1)*s(2)+nr(3,2)*s(4))/s(3)
+*get,ydsp,node,node(0,0,0),u,y !перемещение центра	
+ydsp=abs(ydsp)
+*end
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+*dim,vt,array,1,10
+*create,vt0
+	*do,ivt,1,10,1
+	vt(1,ivt)=0
+	*enddo
+*end
+!!!!!!!!!!!!!!!!!!!!!!!!!
+*use,ch3,nint(d*100)
+*create,dia0
+/input,vt0
+vt(1,1)=pm
+vt(1,2)=cs
+vt(1,3)=epart
+vt(1,10)=LL               !Номер этапа нагружения
+*CFOPEN,strcat('s',chl(1)),myz,,APPEND
+*VWRITE,vt(1,1),' ',vt(1,2),' ',vt(1,3),' ',vt(1,4),' ',vt(1,5),' ',vt(1,6),' ',vt(1,7),' ',vt(1,8),' ',vt(1,9),' ',vt(1,10)
+(10(G10.4,a1))
+*cfclos
+*end
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+/SOL
+!?
+ANTYPE,0
+NLGEOM,1
+!?
+!nropt,full
+solcontrol,on
+!nsubst,10
+!eqslv,pcg,1e-4,3.0
+!eqslv,iter,1e-4,3.0
+!!!!!!!!!!!!
+rescontrol,,last,last
+!CNVTOL,F, ,0.001,1, ,   !установка условий сходимости L1
+CNVTOL,F, , ,1, ,   
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!  
+!!!!!!!!!!!
+LLmax=999
+pmax = 1500
+dsp=0.0
+stp =-0.0002 !-0.0001
+stp =-0.001
+stp =-0.0025
+stp1=stp*0.2
+!!!!!!!!!!!!!!!!!!!
+!
+*dim,eee,array,3,3 !первый - это определяемое значение, а второй - номер этапа
+eee(1,3) = -s(1)/2
+eee(2,3) = 0
+eee(3,3) = s(1)/2
+
+allsel,all
+nsel,s,loc,x,-dd,dd !выбрали сечение
+nsel,r,loc,z,-dd,dd !выбрали сечение
+nsle,r,corner !выбрали только крайние узлы, без промежуточных. 
+*get,n_node,node,0,count !считаем node
+*DIM,n_nodes,ARRAY,n_node !создаем массив
+	*do,i,1,n_node,1
+	n_nodes(i)=node(0,-s(1)/2,0)  !выбираем номер узла, который лежит ближе всего к координате
+	nsel,u,node,,n_nodes(i)	
+	*enddo
+
+allsel,all
+		!*if,i,eq,1,then
+		!*GET,nareaa(1),area,0,NUM,MIN!выбор мин по номеру area
+		!*else
+		!*GET,nareaa(i),area,nareaa(i-1),NXTH!!выбор след по номеру area
+		!*endif
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+*create,temper
+emin = 10000
+epart=0
+	*do,i,1,n_node,1
+	*get,sc2,node,n_nodes(i),s,x
+		*if,i,gt,1,then
+			*if,0,gt,sc1*sc2,then
+			cs=(ny(n_nodes(i-1))+ny(n_nodes(i)))/2
+			ah=n_nodes(i)
+			ai=i
+			*endif
+		*endif
+	sc1=sc2
+!
+	*get,h,node,n_nodes(i),eppl,eqv ! e1 - ввели эту переменную, в ней получим интенсивность пластических деформаций по Мизесу (снизу)
+		*if,h,gt,0,then
+		epart=epart+st
+		*endif
+!
+	*if,h,gt,emin,cycle
+	emin = h
+	*enddo
+epart=epart/s(1)
+*end
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!@
+!начало счета
+*DO,LL,1,LLmax,1
+!*DO,LL,8,LLmax,1
+	FINISH
+!
+	/SOL
+! Строчки, которые позволяют восстанавливливать данные после выхода в постпроцессор
+	*if,LL,gt,1,then
+		parsav,all,KPAR
+		antype,,rest,
+		parres,,KPAR
+	*endif
+	allsel,all
+!************здесь расписываем, как грузим ***********
+	dsp=dsp+stp
+!*************Грузим изгибающим моментом**********
+!	d,node(s(4),s(1)/2,0),uy,dsp
+	allsel, all
+	nsel,s,loc,x,s(4)-dd,s(4)+dd
+	nsel,r,loc,y,s(1)/2-dd,s(1)/2+dd
+	d,all,uy,dsp
+	allsel, all
+!******запускаем подпрограмму назначения материалов******
+	/input,mater
+!***********************
+	ALLSEL,ALL
+	solve
+	*GET,INDEND,ACTIVE,0,SOLU,CNVG
+	*IF,INDEND,EQ,0,EXIT
+!*********************
+	FINISH
+	/POST1
+	SET,LAST
+!******************
+	/input,mat
+	/input,pddef
+	/input,temper
+	/input,dia0
+		*if,epart,ge,0.9,then
+		stp=stp1
+		*endif
+	save
+	*if,emin,gt,0,exit
+	save
+*ENDDO
+!нечто решилось
+save! метить до этого оператора
+!$!!!!!@@@@@@
+
+	FINISH
+	/POST1
+	SET,LAST
+PLNSOL, EPPL,EQV, 0,1.0 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!
+!*dim,chl,char,1 !создание текстового массива, char - переменная chl является текстом 
+!созидание имени
+*create,ch3
+	*if,10,gt,arg1,then
+		chl(1)=strcat('00',CHRVAL(arg1))! CHRVAL- превращает число в текст, strcat - соединяет два текста в один 
+	*endif
+	*if,arg1,ge,10,and,99,ge,arg1,then
+		chl(1)=strcat('0',CHRVAL(arg1))
+	*endif
+	*if,arg1,ge,100,then
+		chl(1)=CHRVAL(arg1)
+	*endif
+*end	
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!Поиск центра(эпюры)
+npoi =201
+allsel,all
+
+*dim,centr,array,LLMax,5
+PADEL,ALL   
+PATH,0,2,npoi,npoi
+	PPATH,1,,0,-s(1)/2,0
+	PPATH,2,,0,s(1)/2,0
+	PATH, 0
+	*do,k,2,LL-1,1
+!*do,k,1,5,1
+	set,k,last     !Установка номера этапа, который решается на данный момент
+	AVPRIN,0, , 
+	PDEF,sx,s,x,AVG 
+
+	PAGET,INTAR_,TABL
+
+		*do,i,1,npoi-1,1
+		*if,0,gt,INTAR_(i,5)*INTAR_(i+1,5),then
+		centr(k,2) = (INTAR_(i,4)+INTAR_(i+1,4))/2-s(1)/2
+		*endif
+		*enddo
+	*DEL,,PRM_
+
+!	PAGET,INTAR_,TABL
+
+
+!	*DEL,,PRM_
+	/input,pddef 
+	centr(k,1) = pm
+	centr(k,3) = ydsp
+	centr(k,4) =nr(3,1)/s(3)
+	centr(k,5) =pml
+	*enddo
+PADELE,all   
+!!!!!!!!!!!!!!!!!!!!!!!!!
+*create,diag
+/input,vt0
+	*do,i,1,LL,1
+		*do,j,1,5,1
+		vt(1,j)=centr(i,j)
+		*enddo
+	vt(1,10)=i               !Номер этапа нагружения
+	*CFOPEN,strcat('d',chl(1)),myz,,APPEND
+*VWRITE,vt(1,1),' ',vt(1,2),' ',vt(1,3),' ',vt(1,4),' ',vt(1,5),' ',vt(1,6),' ',vt(1,7),' ',vt(1,8),' ',vt(1,9),' ',vt(1,10)
+(10(G10.4,a1))
+	*cfclos
+	*enddo
+*end
+
+/input,diag
+!@
+
+
+
+
+allsel,all
+ESEL,S,LIVE!выбор живых элементов
+ESEL,INVERT,LIVE
